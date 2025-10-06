@@ -1,0 +1,318 @@
+{% extends "base.html" %}
+
+{% block title %}Resultados do Processamento{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="header-section">
+        <h2>
+            <i class="fas fa-check-circle text-green"></i>
+            Processamento Concluído
+        </h2>
+        <p class="subtitle">
+            Seus arquivos estão prontos para download e uso
+        </p>
+    </div>
+
+    <!-- Loading State -->
+    <div id="loadingState" class="loading-state">
+        <i class="fas fa-spinner fa-spin"></i>
+        <p>Carregando resultados...</p>
+    </div>
+
+    <!-- Results Content -->
+    <div id="resultsContent" class="results-content hidden">
+        
+        <!-- Summary Cards -->
+        <div class="summary-cards">
+            <div class="summary-card">
+                <i class="fas fa-download"></i>
+                <div class="card-content">
+                    <h3 id="downloadCount">0</h3>
+                    <p>Vídeos Baixados</p>
+                </div>
+            </div>
+            <div class="summary-card">
+                <i class="fas fa-cloud-upload-alt"></i>
+                <div class="card-content">
+                    <h3 id="uploadCount">0</h3>
+                    <p>Arquivos no GCP</p>
+                </div>
+            </div>
+            <div class="summary-card">
+                <i class="fas fa-clock"></i>
+                <div class="card-content">
+                    <h3 id="processingTime">0s</h3>
+                    <p>Tempo Total</p>
+                </div>
+            </div>
+            <div class="summary-card">
+                <i class="fas fa-hdd"></i>
+                <div class="card-content">
+                    <h3 id="fileSize">0 MB</h3>
+                    <p>Tamanho Total</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Download Info -->
+        <div class="info-section">
+            <h3>
+                <i class="fab fa-youtube"></i>
+                Informações do Download
+            </h3>
+            <div class="info-grid">
+                <div class="info-item">
+                    <strong>Sessão:</strong>
+                    <span id="sessionName">-</span>
+                </div>
+                <div class="info-item">
+                    <strong>URL Original:</strong>
+                    <a id="originalUrl" href="#" target="_blank">-</a>
+                </div>
+                <div class="info-item">
+                    <strong>Título do Vídeo:</strong>
+                    <span id="videoTitle">-</span>
+                </div>
+                <div class="info-item">
+                    <strong>Duração:</strong>
+                    <span id="videoDuration">-</span>
+                </div>
+                <div class="info-item">
+                    <strong>Bucket GCP:</strong>
+                    <span id="gcpBucket">dataset_youtube_katube</span>
+                </div>
+                <div class="info-item">
+                    <strong>Status Upload:</strong>
+                    <span id="uploadStatus" class="status-success">✅ Concluído</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- GCP Upload Details -->
+        <div class="gcp-section">
+            <h3>
+                <i class="fas fa-cloud"></i>
+                Arquivos no Google Cloud Storage
+            </h3>
+            <div id="gcpFilesContainer" class="gcp-files-container">
+                <!-- GCP files will be inserted here -->
+            </div>
+        </div>
+
+        <!-- Downloads Section -->
+        <div class="downloads-section">
+            <h3>
+                <i class="fas fa-download"></i>
+                Downloads Disponíveis
+            </h3>
+            <div class="download-grid">
+                <div class="download-card">
+                    <i class="fas fa-file-code"></i>
+                    <h4>Resultados JSON</h4>
+                    <p>Arquivo com todos os dados do processamento</p>
+                    <button onclick="downloadFile('results.json')" class="btn-download">
+                        <i class="fas fa-download"></i>
+                        Baixar JSON
+                    </button>
+                </div>
+                
+                <div class="download-card">
+                    <i class="fas fa-file-audio"></i>
+                    <h4>Áudio FLAC</h4>
+                    <p>Arquivo de áudio baixado do YouTube</p>
+                    <button onclick="downloadFile('audio.flac')" class="btn-download">
+                        <i class="fas fa-download"></i>
+                        Baixar Áudio
+                    </button>
+                </div>
+                
+                <div class="download-card">
+                    <i class="fas fa-list"></i>
+                    <h4>Lista de URLs</h4>
+                    <p>URLs processadas em formato texto</p>
+                    <button onclick="downloadFile('urls.txt')" class="btn-download">
+                        <i class="fas fa-download"></i>
+                        Baixar URLs
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="actions-section">
+            <button onclick="window.location.href='/'" class="btn-primary">
+                <i class="fas fa-plus"></i>
+                Baixar Outro Vídeo
+            </button>
+            
+            <button onclick="window.location.href='/'" class="btn-secondary">
+                <i class="fas fa-home"></i>
+                Voltar ao Início
+            </button>
+            
+            <button onclick="openGCPBucket()" class="btn-gcp">
+                <i class="fas fa-external-link-alt"></i>
+                Ver no GCP Console
+            </button>
+        </div>
+    </div>
+
+    <!-- Error State -->
+    <div id="errorState" class="error-state hidden">
+        <i class="fas fa-exclamation-triangle"></i>
+        <h3>Erro ao Carregar Resultados</h3>
+        <p id="errorMessage">Não foi possível carregar os resultados do processamento.</p>
+        <button onclick="window.location.href='/'" class="btn-secondary">
+            <i class="fas fa-home"></i>
+            Voltar ao Início
+        </button>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const jobId = '{{ job_id }}';
+
+function formatDuration(seconds) {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = Math.floor(seconds % 60);
+    return `${minutes}m ${remainingSeconds}s`;
+}
+
+function formatTime(seconds) {
+    if (seconds < 60) {
+        return `${seconds.toFixed(1)}s`;
+    } else {
+        return formatDuration(seconds);
+    }
+}
+
+function createGCPFileCard(file) {
+    const fileName = file.name ? file.name.split('/').pop() : file.local_path.split('/').pop();
+    const fileType = fileName.includes('.flac') ? 'audio' : 
+                    fileName.includes('.json') ? 'metadata' : 'other';
+    const icon = fileType === 'audio' ? 'fas fa-file-audio' : 
+                fileType === 'metadata' ? 'fas fa-file-code' : 'fas fa-file';
+    
+    // Truncate very long filenames for display
+    const displayName = fileName.length > 50 ? fileName.substring(0, 47) + '...' : fileName;
+    
+    return `
+        <div class="gcp-file-card">
+            <div class="file-header">
+                <i class="${icon}"></i>
+                <h4 title="${fileName}">${displayName}</h4>
+            </div>
+            <div class="file-info">
+                <span class="file-size">${formatFileSize(file.size || 0)}</span>
+                <span class="file-path" title="${file.gcp_path || file.remote_path || 'N/A'}">${file.gcp_path || file.remote_path || 'N/A'}</span>
+            </div>
+        </div>
+    `;
+}
+
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+function downloadFile(fileType) {
+    const downloadUrl = `/download/${jobId}/${fileType}`;
+    
+    // Create temporary link and trigger download
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = '';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+function openGCPBucket() {
+    const bucketUrl = 'https://console.cloud.google.com/storage/browser/dataset_youtube_katube/youtube_downloads?project=gen-lang-client-0500814137';
+    window.open(bucketUrl, '_blank');
+}
+
+function loadResults() {
+    axios.get(`/result/${jobId}`)
+        .then(response => {
+            const data = response.data;
+            const results = data.results || {};
+            const gcp_upload = data.gcp_upload || {};
+            
+            // Hide loading, show content
+            document.getElementById('loadingState').classList.add('hidden');
+            document.getElementById('resultsContent').classList.remove('hidden');
+            
+            // Update summary cards
+            document.getElementById('downloadCount').textContent = results.videos_downloaded || results.downloaded_count || 1;
+            document.getElementById('uploadCount').textContent = gcp_upload.uploaded_count || 0;
+            document.getElementById('processingTime').textContent = formatTime(data.processing_time || 0);
+            
+            // Calculate total file size from uploaded files
+            let totalSize = 0;
+            if (gcp_upload.uploaded_files && gcp_upload.uploaded_files.length > 0) {
+                totalSize = gcp_upload.uploaded_files.reduce((sum, file) => sum + (file.size || 0), 0);
+            }
+            document.getElementById('fileSize').textContent = formatFileSize(totalSize);
+            
+            // Update info section
+            document.getElementById('sessionName').textContent = results.session_name || '-';
+            document.getElementById('originalUrl').href = results.url || '#';
+            document.getElementById('originalUrl').textContent = results.url || '-';
+            
+            // Update video info if available
+            if (results.videos && results.videos.length > 0) {
+                const video = results.videos[0];
+                document.getElementById('videoTitle').textContent = video.title || '-';
+                document.getElementById('videoDuration').textContent = video.duration ? formatTime(video.duration) : '-';
+            }
+            
+            // Update upload status
+            const uploadStatus = document.getElementById('uploadStatus');
+            if (gcp_upload.success === true || gcp_upload.uploaded_count > 0) {
+                uploadStatus.innerHTML = '✅ Concluído';
+                uploadStatus.className = 'status-success';
+            } else if (gcp_upload.success === false) {
+                uploadStatus.innerHTML = '❌ Falhou';
+                uploadStatus.className = 'status-error';
+            } else {
+                uploadStatus.innerHTML = '⚠️ Não configurado';
+                uploadStatus.className = 'status-warning';
+            }
+            
+            // Create GCP files cards
+            const gcpContainer = document.getElementById('gcpFilesContainer');
+            let gcpFilesHtml = '';
+            
+            if (gcp_upload.uploaded_files && gcp_upload.uploaded_files.length > 0) {
+                for (const file of gcp_upload.uploaded_files) {
+                    gcpFilesHtml += createGCPFileCard(file);
+                }
+            } else {
+                gcpFilesHtml = '<p class="no-files">Nenhum arquivo encontrado no GCP.</p>';
+            }
+            
+            gcpContainer.innerHTML = gcpFilesHtml;
+            
+        })
+        .catch(error => {
+            console.error('Erro ao carregar resultados:', error);
+            
+            document.getElementById('loadingState').classList.add('hidden');
+            document.getElementById('errorState').classList.remove('hidden');
+            
+            const errorMessage = error.response?.data?.error || 'Erro desconhecido ao carregar resultados';
+            document.getElementById('errorMessage').textContent = errorMessage;
+        });
+}
+
+// Load results when page loads
+document.addEventListener('DOMContentLoaded', loadResults);
+</script>
+{% endblock %}
